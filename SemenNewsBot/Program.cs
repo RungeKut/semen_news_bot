@@ -1,12 +1,11 @@
-﻿using static Telegram.Bot.TelegramBotClient;
-using Telegram.Bot.Polling;
+﻿using Telegram.Bot.Polling;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types;
 using SemenNewsBot;
 
-class Program
+internal static class Program
 {
     // Это клиент для работы с Telegram Bot API, который позволяет отправлять сообщения, управлять ботом, подписываться на обновления и многое другое.
     private static ITelegramBotClient? _botClient;
@@ -14,9 +13,10 @@ class Program
     // Это объект с настройками работы бота. Здесь мы будем указывать, какие типы Update мы будем получать, Timeout бота и так далее.
     private static ReceiverOptions? _receiverOptions;
 
+    [STAThread]
     static async Task Main()
     {
-
+        Settings.Init();
         _botClient = new TelegramBotClient(Settings.Instance.TokenToAccess); // Присваиваем нашей переменной значение, в параметре передаем Token, полученный от BotFather
         _receiverOptions = new ReceiverOptions // Также присваем значение настройкам бота
         {
@@ -36,6 +36,8 @@ class Program
         Console.WriteLine($"{me.FirstName} запущен!");
 
         await Task.Delay(-1); // Устанавливаем бесконечную задержку, чтобы наш бот работал постоянно
+
+        Thread.Sleep(60000);
     }
 
     private static async Task UpdateHandler(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)

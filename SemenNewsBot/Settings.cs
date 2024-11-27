@@ -1,33 +1,36 @@
-﻿using System;
-using System.Text.Json;
-using static System.Net.Mime.MediaTypeNames;
-using static System.Runtime.InteropServices.JavaScript.JSType;
+﻿using System.Text.Json;
 
 namespace SemenNewsBot
 {
     public class Settings
     {
-        private static Settings instance;
+        private static Settings? instance;
         public static Settings Instance
         {
             get
             {
                 if (instance == null)
                     instance = new Settings();
-
                 return instance;
             }
         }
-        private readonly string? _tokenToAccess;
-        private string path = "Settings.json";
-        public string TokenToAccess { get { return _tokenToAccess ?? string.Empty; } }
+
+        private static readonly string _settingsPath = "Settings.json";
+
+        private string _tokenToAccess;
+        public string TokenToAccess { get { return _tokenToAccess ?? string.Empty; } set { _tokenToAccess = value; } }
         public Settings() 
         {
-            using (StreamReader reader = new StreamReader(path))
+            _tokenToAccess = string.Empty;
+        }
+
+        public static void Init()
+        {
+            using (StreamReader reader = new StreamReader(_settingsPath))
             {
                 string json = reader.ReadToEnd();
-                JsonSerializer.Deserialize<Settings>(json);
-                Console.WriteLine("Read TokenToAccess: " + _tokenToAccess);
+                Settings.instance = JsonSerializer.Deserialize<Settings>(json);
+                Console.WriteLine("Read TokenToAccess: " + Settings.Instance.TokenToAccess);
             }
 
             // полная перезапись файла 
