@@ -16,35 +16,45 @@ namespace SemenNewsBot
         }
 
         private static readonly string _settingsPath = "Settings.json";
-
-        private string _tokenToAccess;
-        public string TokenToAccess { get { return _tokenToAccess ?? string.Empty; } set { _tokenToAccess = value; } }
-        public Settings() 
-        {
-            _tokenToAccess = string.Empty;
-        }
+        public string GetSettingsPath() { return _settingsPath; }
+        public string? TokenToAccess { get; set; }
+        public long SemenovChatId { get; set; }
+        public int? SemenovThemeId { get; set; }
 
         public static void Init()
         {
-            using (StreamReader reader = new StreamReader(_settingsPath))
+            try
             {
-                string json = reader.ReadToEnd();
-                Settings.instance = JsonSerializer.Deserialize<Settings>(json);
-                Console.WriteLine("Read TokenToAccess: " + Settings.Instance.TokenToAccess);
+                using (StreamReader reader = new StreamReader(Settings.Instance.GetSettingsPath()))
+                {
+                    string json = reader.ReadToEnd();
+                    Settings.instance = JsonSerializer.Deserialize<Settings>(json);
+                    Console.WriteLine("Read TokenToAccess: " + Settings.Instance.TokenToAccess);
+                }
             }
-
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
+                Save();
+            }
+        }
+        public static void Save()
+        {
             // полная перезапись файла 
-            //using (StreamWriter writer = new StreamWriter(path, false))
-            //{
-            //    writer.WriteLine(JsonSerializer.Serialize(this, typeof(Settings)));
-            //}
+            using (StreamWriter writer = new StreamWriter(Settings.Instance.GetSettingsPath(), false))
+            {
+                writer.WriteLine(JsonSerializer.Serialize(Settings.Instance, typeof(Settings)));
+            }
+        }
 
+        public static void Add()
+        {
             // добавление в файл
-            //using (StreamWriter writer = new StreamWriter(path, true))
-            //{
-            //    writer.WriteLine("Addition");
-            //    writer.Write("4,5");
-            //}
+            using (StreamWriter writer = new StreamWriter(Settings.Instance.GetSettingsPath(), true))
+            {
+                writer.WriteLine("Addition");
+                writer.Write("4,5");
+            }
         }
     }
 }

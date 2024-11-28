@@ -4,6 +4,7 @@ using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types;
 using SemenNewsBot;
+using System.Text.Json;
 
 internal static class Program
 {
@@ -35,9 +36,11 @@ internal static class Program
         var me = await _botClient.GetMeAsync(); // Создаем переменную, в которую помещаем информацию о нашем боте.
         Console.WriteLine($"{me.FirstName} запущен!");
 
-        await Task.Delay(-1); // Устанавливаем бесконечную задержку, чтобы наш бот работал постоянно
-
-        Thread.Sleep(60000);
+        //await Task.Delay(-1); // Устанавливаем бесконечную задержку, чтобы наш бот работал постоянно
+        while (true)
+        {
+            Thread.Sleep(1000);
+        }
     }
 
     private static async Task UpdateHandler(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
@@ -50,7 +53,16 @@ internal static class Program
             {
                 case UpdateType.Message:
                     {
-                        Console.WriteLine("Пришло сообщение!");
+                        if (update.Message.From.Username == "bspalych")
+                        {
+                            if (update.Message.Text == "Это новостная тема Семенова!")
+                            {
+                                Settings.Instance.SemenovChatId = update.Message.Chat.Id;
+                                Settings.Instance.SemenovThemeId = update.Message.MessageThreadId;
+                                Settings.Save();
+                                botClient.SendMessage(update.Message.Chat.Id, "Id новостной темы Семенова сохранено!", messageThreadId: update.Message.MessageThreadId);
+                            }
+                        }
                         return;
                     }
             }
