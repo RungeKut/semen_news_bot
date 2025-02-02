@@ -5,6 +5,9 @@ using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types;
 using SemenNewsBot;
 using System.Text.Json;
+using System.Net;
+using System.Xml;
+using System.ServiceModel.Syndication;
 
 internal static class Program
 {
@@ -39,7 +42,8 @@ internal static class Program
         //await Task.Delay(-1); // Устанавливаем бесконечную задержку, чтобы наш бот работал постоянно
         while (true)
         {
-            Thread.Sleep(1000);
+            SemenovNoblRu.Instance.SemenovNoblRuExecuter(_botClient);
+            Thread.Sleep(1000*60*10); //10минут
         }
     }
 
@@ -60,6 +64,7 @@ internal static class Program
                                 Settings.Instance.SemenovChatId = update.Message.Chat.Id;
                                 Settings.Instance.SemenovThemeId = update.Message.MessageThreadId;
                                 Settings.Save();
+                                botClient.DeleteMessage(update.Message.Chat.Id, update.Message.Id);
                                 botClient.SendMessage(update.Message.Chat.Id, "Id новостной темы Семенова сохранено!", messageThreadId: update.Message.MessageThreadId);
                             }
                         }
