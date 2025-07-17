@@ -6,6 +6,7 @@ using System.Net;
 using System.ServiceModel.Syndication;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml;
 using Telegram.Bot;
@@ -83,7 +84,7 @@ namespace SemenNewsBot
                             {
                                 Title = item.Title.Text,
                                 Link = item.Links.First().Uri,
-                                Text = item.Summary.Text
+                                Text = Regex.Replace(item.Summary.Text, @"\s+", " ").Trim()
                             };
                             if (SemenovNoblRu.Instance.SiteContent.Contains(tempContent))
                             {
