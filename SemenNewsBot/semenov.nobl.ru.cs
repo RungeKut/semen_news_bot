@@ -1,13 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
-using System.Linq;
-using System.Net;
+﻿using System.Net;
 using System.ServiceModel.Syndication;
-using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using System.Xml;
 using Telegram.Bot;
 
@@ -23,7 +17,7 @@ namespace SemenNewsBot
                 if (instance == null)
                 {
                     instance = new SemenovNoblRu();
-                    Init();
+                    instance.Init();
                 }
                 return instance;
             }
@@ -33,108 +27,185 @@ namespace SemenNewsBot
             public string? Title { get; set; }
             public Uri? Link { get; set; }
             public string? Text { get; set; }
-            public override bool Equals([NotNullWhen(true)] object? comparand)
+            public override bool Equals(object? obj)
             {
-                if (comparand is null)
-                {
-                    return false;
-                }
+                if (obj is null) return false;
+                if (ReferenceEquals(this, obj)) return true;
+                if (obj is not Content other) return false;
 
-                if (ReferenceEquals(this, comparand))
-                {
-                    return true;
-                }
+                // Нормализуем URI для сравнения (удаляем завершающий слеш)
+                var thisLink = Title + NormalizeUri(Link) + Text;
+                var otherLink = other.Title + NormalizeUri(other.Link) + other.Text;
+                return thisLink == otherLink;
+            }
 
-                Content? obj = comparand as Content;
-
-                if (obj is null)
-                    return false;
-                else
-                    return (Title == obj.Title) && (Link == obj.Link) && (Text == obj.Text);
+            private static string? NormalizeUri(Uri? uri)
+            {
+                return uri?.ToString().TrimEnd('/') ?? string.Empty;
             }
 
             public override int GetHashCode()
             {
-                throw new NotImplementedException();
+                return HashCode.Combine(
+                    Title,
+                    NormalizeUri(Link),
+                    Text
+                );
             }
         }
         private bool EnableSave { get; set; }
         private List<Content> SiteContent { get; set; }
+
+        // Единый HttpClient для всего приложения
+        private static readonly HttpClient SharedClient;
+
+        static SemenovNoblRu()
+        {
+            var handler = new HttpClientHandler
+            {
+                CookieContainer = new CookieContainer(),
+                UseCookies = true
+            };
+
+            // Устанавливаем куки begetok для обхода анти-DDoS
+            var baseAddress = new Uri("https://semenov.nobl.ru/");
+            handler.CookieContainer.Add(baseAddress, new Cookie("beget", "begetok")
+            {
+                Expires = DateTime.UtcNow.AddDays(1),
+                Path = "/",
+                Domain = "semenov.nobl.ru"
+            });
+
+            SharedClient = new HttpClient(handler)
+            {
+                BaseAddress = baseAddress,
+                Timeout = TimeSpan.FromSeconds(30)
+            };
+        }
+
         private SemenovNoblRu()
         {
             SiteContent = new List<Content>();
             EnableSave = true;
         }
-        public async void SemenovNoblRuExecuter(ITelegramBotClient botClient)
-        {
-            var baseAddress = new Uri("https://semenov.nobl.ru/");
-            var cookieContainer = new CookieContainer();
-            using (var handler = new HttpClientHandler() { CookieContainer = cookieContainer })
-            {
-                cookieContainer.Add(baseAddress, new Cookie("beget", "begetok") { Expires = DateTime.UtcNow.AddDays(1), Path = "/" });
-                using (var client = new HttpClient(handler) { BaseAddress = baseAddress })
-                {
-                    var stream = await client.GetStreamAsync("https://semenov.nobl.ru/presscenter/news/rss/");
-                    using (var xmlReader = XmlReader.Create(stream))
-                    {
-                        var feed = SyndicationFeed.Load(xmlReader);
-                        foreach (var item in feed.Items)
-                        {
-                            Content tempContent = new Content()
-                            {
-                                Title = item.Title.Text,
-                                Link = item.Links.First().Uri,
-                                Text = Regex.Replace(item.Summary.Text, @"\s+", " ").Trim()
-                            };
-                            if (SemenovNoblRu.Instance.SiteContent.Contains(tempContent))
-                            {
-                                SemenovNoblRu.Instance.EnableSave = false;
-                            }
-                            else
-                            {
-                                SemenovNoblRu.Instance.SiteContent.Add(tempContent);
-                                botClient.SendMessage(Settings.Instance.SemenovChatId, tempContent.Title + "\n" + tempContent.Link + "\n\n" + tempContent.Text, messageThreadId: Settings.Instance.SemenovThemeId);
-                                Console.WriteLine("NEW semenov.nobl.ru: " + tempContent.Title);
-                                SemenovNoblRu.Instance.EnableSave = true;
-                            }
-                        }
-                        while (SemenovNoblRu.Instance.SiteContent.Count > 100)
-                        {
-                            SemenovNoblRu.Instance.SiteContent.RemoveRange(0, 1);
-                        }
-                        Save();
-                    }
-                }
-            }
-        }
-
-        public static void Init()
+        public async Task SemenovNoblRuExecuter(ITelegramBotClient botClient)
         {
             try
             {
-                using (StreamReader reader = new StreamReader("semenov.nobl.ru.json"))
+                var stream = await SharedClient.GetStreamAsync("presscenter/news/rss/");
+                using var xmlReader = XmlReader.Create(stream);
+                var feed = SyndicationFeed.Load(xmlReader);
+
+                bool newContentFound = false;
+
+                foreach (var item in feed.Items)
                 {
-                    string json = reader.ReadToEnd();
-                    SemenovNoblRu.Instance.SiteContent = JsonSerializer.Deserialize<List<Content>>(json);
+                    Content tempContent;
+                    try
+                    {
+                        tempContent = new Content
+                        {
+                            Title = item.Title?.Text?.Trim(),
+                            Link = item.Links.FirstOrDefault()?.Uri,
+                            Text = Regex.Replace(item.Summary?.Text ?? "", @"\s+", " ").Trim()
+                        };
+                    }
+                    catch
+                    {
+                        tempContent = new Content
+                        {
+                            Title = item.Title?.Text?.Trim(),
+                            Link = item.Links.FirstOrDefault()?.Uri,
+                            Text = item.Summary?.Text?.Trim()
+                        };
+                    }
+
+                    if (tempContent.Title == null || tempContent.Link == null)
+                        continue;
+
+                    if (SiteContent.Contains(tempContent))
+                    {
+                        continue; // Уже есть
+                    }
+
+                    SiteContent.Add(tempContent);
+                    newContentFound = true;
+
+                    try
+                    {
+                        await botClient.SendMessage(
+                            chatId: Settings.Instance.SemenovChatId,
+                            text: $"{tempContent.Title}\n{tempContent.Link}\n\n{tempContent.Text}",
+                            messageThreadId: Settings.Instance.SemenovThemeId
+                        );
+                        Console.WriteLine("NEW semenov.nobl.ru: " + tempContent.Title);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Ошибка отправки сообщения: {ex.Message}");
+                    }
+                }
+
+                if (newContentFound)
+                {
+                    // Ограничиваем список последними 100 записями
+                    if (SiteContent.Count > 100)
+                    {
+                        SiteContent.RemoveRange(0, SiteContent.Count - 100);
+                    }
+                    Save();
+                }
+            }
+            catch (HttpRequestException httpEx)
+            {
+                Console.WriteLine($"Ошибка HTTP-запроса к RSS: {httpEx.Message}");
+            }
+            catch (XmlException xmlEx)
+            {
+                Console.WriteLine($"Ошибка парсинга XML: {xmlEx.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Неизвестная ошибка при обработке RSS: {ex.Message}");
+            }
+        }
+
+        public void Init()
+        {
+            try
+            {
+                if (File.Exists("semenov.nobl.ru.json"))
+                {
+                    string json = File.ReadAllText("semenov.nobl.ru.json");
+                    var contentList = JsonSerializer.Deserialize<List<Content>>(json);
+                    if (contentList != null)
+                    {
+                        SiteContent = contentList;
+                    }
                     Console.WriteLine("Read semenov.nobl.ru.json ОК");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.ToString());
-                Save();
+                Console.WriteLine($"Ошибка при загрузке данных: {ex.Message}");
+                Save(); // Создаём пустой файл
             }
         }
-        public static void Save()
+
+        public void Save()
         {
-            if (SemenovNoblRu.Instance.EnableSave)
+            if (!EnableSave) return;
+
+            try
             {
-                using (StreamWriter writer = new StreamWriter("semenov.nobl.ru.json", false))
-                {
-                    writer.WriteLine(JsonSerializer.Serialize(SemenovNoblRu.Instance.SiteContent, typeof(List<Content>)));
-                    Console.WriteLine("Save semenov.nobl.ru.json ОК");
-                }
-                SemenovNoblRu.Instance.EnableSave = false;
+                string json = JsonSerializer.Serialize(SiteContent, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText("semenov.nobl.ru.json", json);
+                Console.WriteLine("Save semenov.nobl.ru.json ОК");
+                EnableSave = false;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка сохранения: {ex.Message}");
             }
         }
     }

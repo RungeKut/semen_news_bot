@@ -8,16 +8,22 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="System.ServiceModel.Syndication" Version="9.0.0" />
-		<PackageReference Include="Telegram.Bot" Version="22.1.3" />
+		<PackageReference Include="System.ServiceModel.Syndication" Version="9.0.8" />
+		<PackageReference Include="Telegram.Bot" Version="22.6.2" />
 	</ItemGroup>
 
 	<Target Name="PostPublish" AfterTargets="Publish">
-		<Copy SourceFiles="$(ProjectDir)bin\Release\net8.0\Settings.json"
-			DestinationFolder="$(PublishDir)"
-			OverwriteReadOnlyFiles="true"
-			SkipUnchangedFiles="false" />
+
+		<!-- Копируем Settings.json в папку публикации -->
+		<Copy SourceFiles="$(ProjectDir)bin\$(Configuration)\net8.0\Settings.json"
+			  DestinationFolder="$(PublishDir)"
+			  OverwriteReadOnlyFiles="true"
+			  SkipUnchangedFiles="false" />
+		
+		<!-- Копируем всю публикацию на сервер -->
 		<Exec Command="scp -r &quot;$(PublishDir)*&quot; root@telegram.local:/root/publish/SemenNewsBot" />
+
+		<!-- Перезапускаем службу -->
 		<Exec Command="ssh root@telegram.local &quot;systemctl restart SemenNewsBot.service&quot;" />
 	</Target>
 

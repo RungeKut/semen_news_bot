@@ -34,17 +34,35 @@ internal static class Program
 
         // UpdateHander - обработчик приходящих Update`ов
         // ErrorHandler - обработчик ошибок, связанных с Bot API
-        _botClient.StartReceiving(UpdateHandler, ErrorHandler, _receiverOptions, cts.Token); // Запускаем бота
+        // Запускаем приём обновлений
+        _botClient.StartReceiving(
+            updateHandler: UpdateHandler,
+            errorHandler: ErrorHandler,
+            receiverOptions: _receiverOptions,
+            cancellationToken: cts.Token
+        ); // Запускаем бота
 
-        var me = await _botClient.GetMeAsync(); // Создаем переменную, в которую помещаем информацию о нашем боте.
+        User me = await _botClient.GetMe(); // Создаем переменную, в которую помещаем информацию о нашем боте.
         Console.WriteLine($"{me.FirstName} запущен!");
 
         //await Task.Delay(-1); // Устанавливаем бесконечную задержку, чтобы наш бот работал постоянно
-        while (true)
+
+        // =============== Основной цикл — проверка RSS каждые 10 минут ===============
+        while (!cts.Token.IsCancellationRequested)
         {
-            SemenovNoblRu.Instance.SemenovNoblRuExecuter(_botClient);
-            Thread.Sleep(1000*60*10); //10минут
+            try
+            {
+                await SemenovNoblRu.Instance.SemenovNoblRuExecuter(_botClient);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка в RSS-обработчике: {ex.Message}");
+            }
+
+            // Асинхронная задержка — не блокирует поток
+            await Task.Delay(TimeSpan.FromMinutes(10), cts.Token);
         }
+        Console.WriteLine($"{me.FirstName} остановлен!");
     }
 
     private static async Task UpdateHandler(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
@@ -57,15 +75,26 @@ internal static class Program
             {
                 case UpdateType.Message:
                     {
-                        if (update.Message.From.Username == "bspalych")
+                        if (update.Message?.From?.Username == "GroupAnonymousBot")
                         {
                             if (update.Message.Text == "Это новостная тема Семенова!")
                             {
                                 Settings.Instance.SemenovChatId = update.Message.Chat.Id;
                                 Settings.Instance.SemenovThemeId = update.Message.MessageThreadId;
                                 Settings.Save();
-                                botClient.DeleteMessage(update.Message.Chat.Id, update.Message.Id);
-                                botClient.SendMessage(update.Message.Chat.Id, "Id новостной темы Семенова сохранено!", messageThreadId: update.Message.MessageThreadId);
+
+                                await botClient.DeleteMessage(
+                                    chatId: update.Message.Chat.Id,
+                                    messageId: update.Message.Id,
+                                    cancellationToken: cancellationToken
+                                );
+
+                                await botClient.SendMessage(
+                                    chatId: update.Message.Chat.Id,
+                                    text: "Id новостной темы Семенова сохранено!",
+                                    messageThreadId: update.Message.MessageThreadId,
+                                    cancellationToken: cancellationToken
+                                );
                             }
                         }
                         return;
@@ -74,7 +103,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.ToString());
+            Console.WriteLine($"Ошибка в UpdateHandler: {ex.Message}");
         }
     }
 
