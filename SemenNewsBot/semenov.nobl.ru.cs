@@ -79,7 +79,7 @@ namespace SemenNewsBot
             SharedClient = new HttpClient(handler)
             {
                 BaseAddress = baseAddress,
-                Timeout = TimeSpan.FromSeconds(30)
+                Timeout = TimeSpan.FromSeconds(90)
             };
         }
 

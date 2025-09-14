@@ -7,7 +7,7 @@ SuccessExitStatus=143
 
 User=root
 
-WorkingDirectory=/root/linux-x64
+WorkingDirectory=/root/publish/SemenNewsBot
 ExecStart=/root/publish/SemenNewsBot/SemenNewsBot
 Restart=on-failure
 RestartSec=10
